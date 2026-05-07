@@ -8,6 +8,10 @@ import click
 
 from swarmnet.config import ensure_dirs
 from swarmnet.extractors.sec_edgar import SECEdgarExtractor
+from swarmnet.extractors.fred import FredExtractor
+from swarmnet.extractors.census import CensusExtractor
+from swarmnet.extractors.bls_qcew import BLSQCEWExtractor
+from swarmnet.extractors.ffiec_cdr import FFIECCDRExtractor
 from swarmnet.storage import Ledger, list_pending_staging
 
 
@@ -20,11 +24,15 @@ def main():
 @main.command()
 @click.argument("source")
 @click.option("--ticker", "-t", help="Ticker symbol (for sec-edgar)")
-def extract(source: str, ticker: str | None):
+@click.option("--market", "-m", help="Market slug (for fred / census)")
+@click.option("--year", "-y", default=2023, type=int, help="Year (for census · default 2023)")
+def extract(source: str, ticker: str | None, market: str | None, year: int):
     """Run an extractor for a target.
 
     Examples:
       swarmnet extract sec-edgar --ticker DG
+      swarmnet extract fred --market us-national
+      swarmnet extract census-acs --market memphis-msa --year 2023
     """
     if source == "sec-edgar":
         if not ticker:
@@ -32,10 +40,27 @@ def extract(source: str, ticker: str | None):
             sys.exit(1)
         ext = SECEdgarExtractor()
         result = ext.extract(ticker)
-        click.echo(json.dumps(result, indent=2, default=str))
+    elif source == "fred":
+        ext = FredExtractor()
+        result = ext.extract(market or "us-national")
+    elif source == "census-acs":
+        if not market:
+            click.echo("--market required for census-acs", err=True)
+            sys.exit(1)
+        ext = CensusExtractor()
+        result = ext.extract(market, year=year)
+    elif source == "bls-qcew":
+        ext = BLSQCEWExtractor()
+        result = ext.extract(market or "us-national")
+    elif source == "ffiec-cdr":
+        ext = FFIECCDRExtractor()
+        result = ext.extract(market or "us-national")
     else:
         click.echo(f"unknown source: {source}", err=True)
+        click.echo("known sources: sec-edgar · fred · census-acs · bls-qcew · ffiec-cdr", err=True)
         sys.exit(1)
+
+    click.echo(json.dumps(result, indent=2, default=str))
 
 
 @main.command()
