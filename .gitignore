@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+*.log
+data/_raw/
+data/_staging/
+data/_ingested/
+data/_archived/
+data/_logs/
+data/_review-queue/
+.DS_Store
