@@ -26,22 +26,22 @@ from swarmnet.schema.market import Market, MarketMetrics, MarketDemographics
 from swarmnet.schema.comp import SourceRef
 
 
-# the default CRE-relevant series we always pull
+# the default CRE-relevant series we always pull · series IDs verified
 DEFAULT_SERIES = [
-    "DGS10",                # 10-Year Treasury
-    "DFF",                  # Fed Funds Effective
-    "REALLN",               # Real Estate Loans · all commercial banks
+    "DGS10",                # 10-Year Treasury Constant Maturity Rate
+    "DFF",                  # Federal Funds Effective Rate
+    "REALLN",               # Real Estate Loans · All Commercial Banks
     "BUSLOANS",             # Commercial and Industrial Loans
-    "DRSDCIRELLA",          # Delinquency Rate on Commercial RE Loans
-    "DRSDCRELLNS",          # Delinquency Rate on STNL CRE
-    "CSUSHPINSA",           # Case-Shiller national HPI
+    "DRBLACBN",             # Delinquency Rate on Loans Secured by Real Estate
+    "DRCLACBS",             # Delinquency Rate on CRE Loans (booked in domestic offices)
+    "CSUSHPINSA",           # Case-Shiller National HPI
 ]
 
 # map FRED series → Market.metrics field name (best-effort)
 SERIES_TO_METRIC = {
     "DGS10": "treasury_10yr_pct",
     "DFF": "fed_funds_rate_pct",
-    "DRSDCIRELLA": "cmbs_delinquency_pct",  # closest CRE-delinquency metric
+    "DRCLACBS": "cmbs_delinquency_pct",  # CRE delinquency · use as proxy
 }
 
 
@@ -68,9 +68,17 @@ class FredExtractor(BaseExtractor):
         observations: dict[str, list] = {}
         artifact_paths: list[tuple[str, str]] = []
 
+        failed_series: list[str] = []
         try:
             for series_id in DEFAULT_SERIES:
-                obs = self._fetch_series_latest(series_id, limit=4)
+                # per-series resilience · one bad series doesn't kill the run
+                try:
+                    obs = self._fetch_series_latest(series_id, limit=4)
+                except Exception as e:
+                    print(f"  ⚠ skip {series_id}: {type(e).__name__}")
+                    failed_series.append(series_id)
+                    continue
+
                 observations[series_id] = obs
 
                 raw_path, sha = save_raw(
@@ -106,6 +114,7 @@ class FredExtractor(BaseExtractor):
                 "extraction_id": ext_id,
                 "target": target,
                 "series_pulled": len(observations),
+                "series_failed": failed_series,
                 "staging_path": str(staging_path),
                 "metrics_filled": [k for k in SERIES_TO_METRIC if k in observations],
             }
